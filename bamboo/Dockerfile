@@ -1,42 +1,49 @@
-# from  Dave Chevell docker files
+# from https://hub.docker.com/r/atlassian/bamboo-server/dockerfile
+# modified to use alpine and tini
 # changed version to 6.8
 FROM openjdk:8-jdk-alpine
 LABEL maintainer="Peter Gyima peter.gyima@gimadigital.com>"
 
-ENV RUN_USER            bamboo
-ENV RUN_GROUP           bamboo
-
-# https://confluence.atlassian.com/display/BAMBOO/Locating+important+directories+and+files
-ENV BAMBOO_HOME          /var/atlassian/application-data/bamboo
-ENV BAMBOO_INSTALL_DIR   /opt/atlassian/bamboo
-
-VOLUME ["${BAMBOO_HOME}"]
-
-# Expose HTTP and ActiveMQ ports
-EXPOSE 8085
-EXPOSE 54663
-
-WORKDIR $BAMBOO_HOME
-
-CMD ["/entrypoint.sh", "-fg"]
-ENTRYPOINT ["/sbin/tini", "--"]
-
-RUN apk add --no-cache wget curl git git-lfs openssh bash procps openssl perl ttf-dejavu tini maven \
-    && addgroup -S ${RUN_GROUP} \
-    && adduser -S -G ${RUN_GROUP} ${RUN_USER}
-
-COPY entrypoint.sh              /entrypoint.sh
-
 ARG BAMBOO_VERSION=6.8.0
+ENV BAMBOO_USER=bamboo
+ENV BAMBOO_GROUP=bamboo
+ENV BAMBOO_USER_HOME=/home/${BAMBOO_USER}
+ENV BAMBOO_JMS_CONNECTION_PORT=54663
+
+ENV BAMBOO_SERVER_HOME          /var/atlassian/application-data/bamboo
+ENV BAMBOO_SERVER_INSTALL_DIR   /opt/atlassian/bamboo
+
+# Expose HTTP and AGENT JMS ports
+EXPOSE 8085
+EXPOSE $BAMBOO_JMS_CONNECTION_PORT
+
+RUN apk add --no-cache curl git bash procps openssl tini maven 
+
+RUN addgroup ${BAMBOO_GROUP} && \
+     adduser ${BAMBOO_USER} --gecos "First Last,RoomNumber,WorkPhone,HomePhone" --home ${BAMBOO_USER_HOME} --ingroup ${BAMBOO_GROUP} --disabled-password
+
 ARG DOWNLOAD_URL=https://www.atlassian.com/software/bamboo/downloads/binary/atlassian-bamboo-${BAMBOO_VERSION}.tar.gz
 
-COPY . /tmp
+RUN mkdir -p ${BAMBOO_SERVER_INSTALL_DIR} && \
+    mkdir -p ${BAMBOO_SERVER_HOME}
+RUN curl -L --silent ${DOWNLOAD_URL} | tar -xz --strip-components=1 -C "$BAMBOO_SERVER_INSTALL_DIR"
 
-RUN mkdir -p                             ${BAMBOO_INSTALL_DIR} \
-    && curl -L --silent                  ${DOWNLOAD_URL} | tar -xz --strip-components=1 -C "$BAMBOO_INSTALL_DIR" \
-    && chown -R ${RUN_USER}:${RUN_GROUP} ${BAMBOO_INSTALL_DIR}/ \
-    && sed -i -e 's/^JVM_SUPPORT_RECOMMENDED_ARGS=""$/: \${JVM_SUPPORT_RECOMMENDED_ARGS:=""}/g' ${BAMBOO_INSTALL_DIR}/bin/setenv.sh \
-    && sed -i -e 's/^JVM_\(.*\)_MEMORY="\(.*\)"$/: \${JVM_\1_MEMORY:=\2}/g' ${BAMBOO_INSTALL_DIR}/bin/setenv.sh \
-    && sed -i -e 's/^JAVA_OPTS="/JAVA_OPTS="${JAVA_OPTS} /g' ${BAMBOO_INSTALL_DIR}/bin/setenv.sh \
-    && sed -i -e 's/port="8085"/port="8085" secure="${catalinaConnectorSecure}" scheme="${catalinaConnectorScheme}" proxyName="${catalinaConnectorProxyName}" proxyPort="${catalinaConnectorProxyPort}"/' ${BAMBOO_INSTALL_DIR}/conf/server.xml \
-    && sed -i -e 's/Context path=""/Context path="${catalinaContextPath}"/' ${BAMBOO_INSTALL_DIR}/conf/server.xml
+RUN echo "bamboo.home=${BAMBOO_SERVER_HOME}" > $BAMBOO_SERVER_INSTALL_DIR/atlassian-bamboo/WEB-INF/classes/bamboo-init.properties
+
+RUN chown -R "${BAMBOO_USER}:${BAMBOO_GROUP}" "${BAMBOO_SERVER_INSTALL_DIR}"
+RUN chown -R "${BAMBOO_USER}:${BAMBOO_GROUP}" "${BAMBOO_SERVER_HOME}"
+
+COPY entrypoint.sh              /entrypoint.sh
+RUN chown ${BAMBOO_USER}:${BAMBOO_GROUP} /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+#create symlink to automate capability detection
+RUN ln -s /usr/share/maven /usr/share/maven3
+
+VOLUME ["${BAMBOO_SERVER_HOME}"]
+
+USER ${BAMBOO_USER}
+WORKDIR $BAMBOO_SERVER_HOME
+
+CMD ["/entrypoint.sh"]
+ENTRYPOINT ["/sbin/tini", "--"]
+
