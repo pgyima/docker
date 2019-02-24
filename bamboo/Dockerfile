@@ -1,6 +1,5 @@
 # from https://hub.docker.com/r/atlassian/bamboo-server/dockerfile
 # modified to use alpine and tini
-# changed version to 6.8
 FROM openjdk:8-jdk-alpine
 LABEL maintainer="Peter Gyima peter.gyima@gimadigital.com>"
 
