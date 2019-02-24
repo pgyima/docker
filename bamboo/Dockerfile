@@ -28,7 +28,7 @@ RUN apk add --no-cache wget curl git git-lfs openssh bash procps openssl perl tt
 COPY entrypoint.sh              /entrypoint.sh
 
 ARG BAMBOO_VERSION=6.8.0
-ARG DOWNLOAD_URL=https://product-downloads.atlassian.com/software/bamboo/downloads/atlassian-bamboo-${BAMBOO_VERSION}.tar.gz
+ARG DOWNLOAD_URL=https://www.atlassian.com/software/bamboo/downloads/binary/atlassian-bamboo-${BAMBOO_VERSION}.tar.gz
 
 COPY . /tmp
 
